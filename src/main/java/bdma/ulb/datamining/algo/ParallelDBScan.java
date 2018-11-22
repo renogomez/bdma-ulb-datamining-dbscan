@@ -9,6 +9,8 @@ import org.apache.commons.math3.util.Precision;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.management.StringValueExp;
+import javax.swing.plaf.synth.SynthTabbedPaneUI;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -33,7 +35,7 @@ public class ParallelDBScan implements IDbScan {
 
     private static final Logger log = LoggerFactory.getLogger(ParallelDBScan.class);
     private static final int cores = Runtime.getRuntime().availableProcessors();
-    private static final int workers = cores;  //For now
+    private static final int workers = 3;  //For now
     private static final ExecutorService executor = Executors.newFixedThreadPool(workers);
 
     private final List<double[]> dataSet;
@@ -86,6 +88,7 @@ public class ParallelDBScan implements IDbScan {
                 final double[] current = points.get(index);
                 index ++;
                 if(isNull(visited.get(current))) {
+                    //System.out.println("visiting " + index + " which is " + current);
                     visited.put(current, true);
                     final List<double[]> neighbours = getNeighbours(current, dataSet, epsilon);
                     if (!isNullOrEmpty(neighbours)) {
@@ -151,7 +154,7 @@ public class ParallelDBScan implements IDbScan {
 
         System.out.println("--Printing CompleX Grids---");
         denseComplexGrids.forEach(c -> {
-            System.out.println("Complex Formed with Grid with ids " + c.getGridIds());
+            System.out.println("Complex Formed with Grid with ids " + c.getGridIds() + "with size " + denseComplexGrids.size());
         });
 
 
@@ -164,6 +167,7 @@ public class ParallelDBScan implements IDbScan {
         //Multi threaded DBScan
         final List<ComplexGrid> allComplexGrids = new ArrayList<>(nonDenseComplexGrids);
         allComplexGrids.addAll(denseComplexGrids);
+        printComplexGrids(allComplexGrids);
 
         final List<Future<ParallelComputationResult>> resultPool = new ArrayList<>();
         for(final ComplexGrid complexGrid : allComplexGrids) {
@@ -198,35 +202,8 @@ public class ParallelDBScan implements IDbScan {
             }
             System.out.println("-0-0-0-0-0-0-0-0-0-0-0");
         });
-        //        List<Cluster> cluster1 = parallelComputationResults.get(0).getClusters();
-//        List<Cluster> clusters2 = Arrays.asList(
-//                parallelComputationResults.get(40).getClusters(),
-//                parallelComputationResults.get(42).getClusters(),
-//                parallelComputationResults.get(43).getClusters(),
-//                parallelComputationResults.get(44).getClusters(),
-//                parallelComputationResults.get(46).getClusters(),
-//                parallelComputationResults.get(48).getClusters(),
-//                parallelComputationResults.get(49).getClusters(),
-//                parallelComputationResults.get(52).getClusters(),
-//                parallelComputationResults.get(53).getClusters()
-//        ).stream().flatMap(Collection :: stream).collect(toList());
-//        Cluster mergedCluster3 = mergeClusters(clusters2);
-        //        List<Cluster> cluster6 = parallelComputationResults.get(15).getClusters();
-//
-////        List<Cluster> clusters5 = parallelComputationResults.get(5).getClusters();
-////        List<Cluster> clusters6 = parallelComputationResults.get(6).getClusters();
-////        List<Cluster> clusters7 = parallelComputationResults.get(7).getClusters();
-//
-//        List<Cluster> testing = Arrays.asList(
-//                mergedCluster3
-//        );
-//        for(Cluster c : testing) {
-//            System.out.println(c.getSize());
-//
-//            System.out.println(Util.stringRepresentation(c.getDataPoints()));
-//        }
+        printClusters(parallelComputationResults.stream().map(p->p.getClusters()).collect(toList()));
 
-//
 
         try {
             executor.shutdown();
@@ -401,19 +378,75 @@ public class ParallelDBScan implements IDbScan {
     }
 
     private static void printToCsv(final List<Grid> grids) throws IOException {
-        final CSVWriter writer = new CSVWriter(new FileWriter("/Users/ankushsharma/Desktop/code/dbscan/src/main/resources/test.csv"),
+        final CSVWriter writer = new CSVWriter(new FileWriter("/Users/reno/bdma/datamining/bdma-ulb-datamining-assignment-2/test.csv"),
                                                CSVWriter.DEFAULT_SEPARATOR, CSVWriter.NO_QUOTE_CHARACTER);
         final List<String[]> headers = new ArrayList<>();
-        headers.add(new String[]{"id", "label", "x", "y"});
+        headers.add(new String[]{"id", "gridID", "label", "x", "y"});
         writer.writeAll(headers);
-
+        int index = 0;
         for(final Grid grid : grids) {
             final List<String[]> output = new ArrayList<>();
             for(final double[] point : grid.getDataPoints()) {
-                output.add(new String[]{grid.getId(), grid.getLabel().name(), String.valueOf(point[0]), String.valueOf(point[1])});
+                output.add(new String[]{String.valueOf(index), grid.getId(), grid.getLabel().name(), String.valueOf(point[0]), String.valueOf(point[1])});
+                index++;
             }
             writer.writeAll(output);
         }
+        writer.close();
+    }
+
+
+    private static void printComplexGrids(final List<ComplexGrid> complexGrids) throws IOException {
+        final CSVWriter writer = new CSVWriter(new FileWriter("/Users/reno/bdma/datamining/bdma-ulb-datamining-assignment-2/complex.csv"),
+                CSVWriter.DEFAULT_SEPARATOR, CSVWriter.NO_QUOTE_CHARACTER);
+        final List<String[]> headers = new ArrayList<>();
+        headers.add(new String[]{"id", "complexID", "gridID", "label", "x", "y"});
+        System.out.println("HEEEEEYYYYY " + complexGrids.size());
+        writer.writeAll(headers);
+        int index = 0;
+        int complexIndex = 0;
+        for(ComplexGrid c : complexGrids) {
+            System.out.println("HEEEEEYYYYY Complex Formed with Grid with ids " + c.getGridIds());
+            for(final Grid grid : c.getGrids()) {
+
+                final List<String[]> output = new ArrayList<>();
+                for(final double[] point : grid.getDataPoints()) {
+                    output.add(new String[]{String.valueOf(index), c.getGridIds().stream().collect(Collectors.joining("_")), grid.getId(), grid.getLabel().name(), String.valueOf(point[0]), String.valueOf(point[1])});
+                    index = index + 1;
+                }
+                writer.writeAll(output);
+            }
+
+        }
+
+        writer.close();
+    }
+
+    private static void printClusters(final List<List<Cluster>> clusters) throws IOException {
+        final CSVWriter writer = new CSVWriter(new FileWriter("/Users/reno/bdma/datamining/bdma-ulb-datamining-assignment-2/clusters.csv"),
+                CSVWriter.DEFAULT_SEPARATOR, CSVWriter.NO_QUOTE_CHARACTER);
+        final List<String[]> headers = new ArrayList<>();
+        headers.add(new String[]{"id", "clusterId", "x", "y"});
+        System.out.println("HEEEEEYYYYY " + clusters.size());
+        writer.writeAll(headers);
+        int index = 0;
+        int complexIndex = 0;
+        for(List<Cluster> cS : clusters) {
+            final List<String[]> output = new ArrayList<>();
+            for(Cluster c : cS) {
+                //System.out.println("HEEEEEYYYYY Complex Formed with Grid with ids " + c.());
+
+                    for(final double[] point : c.getDataPoints()) {
+                        output.add(new String[]{String.valueOf(index), String.valueOf(complexIndex), String.valueOf(point[0]), String.valueOf(point[1])});
+                        index = index + 1;
+
+                }
+                writer.writeAll(output);
+                complexIndex++;
+            }
+
+        }
+
         writer.close();
     }
 
@@ -429,7 +462,7 @@ public class ParallelDBScan implements IDbScan {
 //                new double[]{6, 8}
 //        );
 
-        String fileLocation = "/Users/ankushsharma/Downloads/Factice_2Dexample.csv";
+        String fileLocation = "/Users/reno/bdma/datamining/bdma-ulb-datamining-assignment-2/ex_Aggregation.csv";
         List<double[]> dataSet = Files.readAllLines(Paths.get(fileLocation))
                 .stream()
                 .map(string -> string.split(",")) // Each line is a string, we break it based on delimiter ',' . This gives us an array
@@ -438,12 +471,12 @@ public class ParallelDBScan implements IDbScan {
                 .collect(Collectors.toList());
 
 
-        double epsilon = 10;
-        int minPts = 5;
+        double epsilon = 1.8;
+        int minPts = 1550;
 //        DBScan dbScan = new DBScan(dataSet, epsilon, minPts);
 
         ParallelDBScan parallelDBScan = new ParallelDBScan(
-                dataSet, 10, minPts, 8
+                dataSet, epsilon, minPts, 2
         );
 
         parallelDBScan.compute();
